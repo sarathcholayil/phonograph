@@ -35,4 +35,10 @@ interface RecordingRepository {
      * Returns the published Recording object, or null if publication failed.
      */
     suspend fun publishRecording(tempFile: File): Recording?
+
+    /**
+     * Renames the specified recording to a new name.
+     * Returns true if rename was successful, false otherwise.
+     */
+    suspend fun renameRecording(recording: Recording, newName: String): Boolean
 }

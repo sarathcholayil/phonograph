@@ -80,7 +80,7 @@ class MediaStoreRepository @Inject constructor(
             0L
         }
 
-        val timeStamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date())
+        val timeStamp = SimpleDateFormat("dd-MMM-yyyy-hh:mm:ss-a", Locale.US).format(Date())
         val displayName = "$timeStamp.m4a"
 
         val relativePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -150,6 +150,20 @@ class MediaStoreRepository @Inject constructor(
             false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to delete recording: ${recording.uri}", e)
+            false
+        }
+    }
+
+    override suspend fun renameRecording(recording: Recording, newName: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val resolver = context.contentResolver
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Audio.Media.DISPLAY_NAME, newName)
+            }
+            val rowsUpdated = resolver.update(recording.uri, contentValues, null, null)
+            rowsUpdated > 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to rename recording: ${recording.uri} to $newName", e)
             false
         }
     }

@@ -10,7 +10,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
-import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -21,13 +20,7 @@ import com.svcj91.naradavoicerecorder.domain.repository.RecordingRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
@@ -48,10 +41,6 @@ class RecordingForegroundService : Service() {
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
-    private val _elapsedTimeSeconds = MutableStateFlow(0L)
-    val elapsedTimeSeconds: StateFlow<Long> = _elapsedTimeSeconds.asStateFlow()
-
-    private var timerJob: Job? = null
     private var currentTempFile: File? = null
     private var isServiceRunning = false
 
@@ -59,15 +48,9 @@ class RecordingForegroundService : Service() {
         getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }
 
-    private val binder = LocalBinder()
-
-    inner class LocalBinder : Binder() {
-        fun getService(): RecordingForegroundService = this@RecordingForegroundService
-    }
-
-    override fun onBind(intent: Intent): IBinder {
-        Log.d(TAG, "Service bound")
-        return binder
+    override fun onBind(intent: Intent): IBinder? {
+        Log.d(TAG, "Service onBind")
+        return null
     }
 
     override fun onCreate() {
@@ -75,6 +58,24 @@ class RecordingForegroundService : Service() {
         Log.d(TAG, "Service onCreate")
         createNotificationChannel()
         registerReceiverCompat()
+
+        // Observe elapsed time to update notification
+        serviceScope.launch {
+            audioRecorder.elapsedTimeSeconds.collect { elapsedSeconds ->
+                if (isServiceRunning) {
+                    updateNotification(elapsedSeconds)
+                }
+            }
+        }
+
+        // Observe paused state to update notification title/details
+        serviceScope.launch {
+            audioRecorder.isPaused.collect {
+                if (isServiceRunning) {
+                    updateNotification(audioRecorder.elapsedTimeSeconds.value)
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -82,6 +83,9 @@ class RecordingForegroundService : Service() {
         when (intent?.action) {
             ACTION_START -> startRecordingService()
             ACTION_STOP -> stopRecordingService()
+            ACTION_DISCARD -> discardRecordingService()
+            ACTION_PAUSE -> pauseRecordingService()
+            ACTION_RESUME -> resumeRecordingService()
         }
         return START_NOT_STICKY
     }
@@ -109,7 +113,6 @@ class RecordingForegroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
 
-            startTimer()
             Log.d(TAG, "Recording service started successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start recording service", e)
@@ -125,8 +128,23 @@ class RecordingForegroundService : Service() {
         stopSelf()
     }
 
+    private fun discardRecordingService() {
+        if (!isServiceRunning) return
+        isServiceRunning = false
+        Log.d(TAG, "Discarding recording service")
+        discardRecordingAndCleanup()
+        stopSelf()
+    }
+
+    private fun pauseRecordingService() {
+        audioRecorder.pause()
+    }
+
+    private fun resumeRecordingService() {
+        audioRecorder.resume()
+    }
+
     private fun stopRecordingAndCleanup() {
-        stopTimer()
         try {
             audioRecorder.stop()
         } catch (e: Exception) {
@@ -155,21 +173,31 @@ class RecordingForegroundService : Service() {
         }
     }
 
-    private fun startTimer() {
-        timerJob?.cancel()
-        _elapsedTimeSeconds.value = 0L
-        timerJob = serviceScope.launch {
-            while (isActive) {
-                delay(1000)
-                _elapsedTimeSeconds.value += 1
-                updateNotification(_elapsedTimeSeconds.value)
+    private fun discardRecordingAndCleanup() {
+        try {
+            audioRecorder.stop()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping audio recorder", e)
+        }
+
+        val tempFile = currentTempFile
+        currentTempFile = null
+
+        if (tempFile != null && tempFile.exists()) {
+            try {
+                val deleted = tempFile.delete()
+                Log.d(TAG, "Temp file deleted: $deleted")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error deleting temp file", e)
             }
         }
-    }
 
-    private fun stopTimer() {
-        timerJob?.cancel()
-        timerJob = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
     }
 
     private fun updateNotification(elapsedSeconds: Long) {
@@ -188,15 +216,35 @@ class RecordingForegroundService : Service() {
         }
         val pendingIntent = PendingIntent.getActivity(this, 0, clickIntent, pendingIntentFlags)
 
+        // Action intents for Notification controls
+        val stopServiceIntent = Intent(this, RecordingForegroundService::class.java).apply {
+            action = ACTION_STOP
+        }
+        val stopPendingIntent = PendingIntent.getService(this, 1, stopServiceIntent, pendingIntentFlags)
+
+        val isPaused = audioRecorder.isPaused.value
+        val pauseResumeActionIntent = if (isPaused) {
+            Intent(this, RecordingForegroundService::class.java).apply { action = ACTION_RESUME }
+        } else {
+            Intent(this, RecordingForegroundService::class.java).apply { action = ACTION_PAUSE }
+        }
+        val pauseResumePendingIntent = PendingIntent.getService(this, 2, pauseResumeActionIntent, pendingIntentFlags)
+
         val formattedTime = formatElapsedTime(elapsedSeconds)
+        val title = if (isPaused) "Recording paused" else "Recording in progress"
+        
+        val pauseResumeIcon = if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
+        val pauseResumeText = if (isPaused) "Resume" else "Pause"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Recording in progress")
+            .setContentTitle(title)
             .setContentText(formattedTime)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setSilent(true)
+            .addAction(pauseResumeIcon, pauseResumeText, pauseResumePendingIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)
             .build()
     }
 
@@ -259,6 +307,9 @@ class RecordingForegroundService : Service() {
 
         const val ACTION_START = "com.svcj91.naradavoicerecorder.service.ACTION_START"
         const val ACTION_STOP = "com.svcj91.naradavoicerecorder.service.ACTION_STOP"
+        const val ACTION_DISCARD = "com.svcj91.naradavoicerecorder.service.ACTION_DISCARD"
+        const val ACTION_PAUSE = "com.svcj91.naradavoicerecorder.service.ACTION_PAUSE"
+        const val ACTION_RESUME = "com.svcj91.naradavoicerecorder.service.ACTION_RESUME"
 
         fun startService(context: Context) {
             val intent = Intent(context, RecordingForegroundService::class.java).apply {
@@ -274,6 +325,27 @@ class RecordingForegroundService : Service() {
         fun stopService(context: Context) {
             val intent = Intent(context, RecordingForegroundService::class.java).apply {
                 action = ACTION_STOP
+            }
+            context.startService(intent)
+        }
+
+        fun discardService(context: Context) {
+            val intent = Intent(context, RecordingForegroundService::class.java).apply {
+                action = ACTION_DISCARD
+            }
+            context.startService(intent)
+        }
+
+        fun pauseService(context: Context) {
+            val intent = Intent(context, RecordingForegroundService::class.java).apply {
+                action = ACTION_PAUSE
+            }
+            context.startService(intent)
+        }
+
+        fun resumeService(context: Context) {
+            val intent = Intent(context, RecordingForegroundService::class.java).apply {
+                action = ACTION_RESUME
             }
             context.startService(intent)
         }

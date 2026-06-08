@@ -21,22 +21,43 @@ import java.io.File
  */
 class FakeAudioRecorder : AudioRecorder {
     private val _isRecording = MutableStateFlow(false)
-    override val isRecording: Flow<Boolean> = _isRecording.asStateFlow()
+    override val isRecording: kotlinx.coroutines.flow.StateFlow<Boolean> = _isRecording.asStateFlow()
+
+    private val _isPaused = MutableStateFlow(false)
+    override val isPaused: kotlinx.coroutines.flow.StateFlow<Boolean> = _isPaused.asStateFlow()
+
+    private val _elapsedTimeSeconds = MutableStateFlow(0L)
+    override val elapsedTimeSeconds: kotlinx.coroutines.flow.StateFlow<Long> = _elapsedTimeSeconds.asStateFlow()
+
     override val errorEvents: Flow<String> = kotlinx.coroutines.flow.MutableSharedFlow<String>()
 
     var lastOutputFile: File? = null
     var startCalledCount = 0
     var stopCalledCount = 0
+    var pauseCalledCount = 0
+    var resumeCalledCount = 0
 
     override fun start(outputFile: File) {
         startCalledCount++
         lastOutputFile = outputFile
         _isRecording.value = true
+        _isPaused.value = false
     }
 
     override fun stop() {
         stopCalledCount++
         _isRecording.value = false
+        _isPaused.value = false
+    }
+
+    override fun pause() {
+        pauseCalledCount++
+        _isPaused.value = true
+    }
+
+    override fun resume() {
+        resumeCalledCount++
+        _isPaused.value = false
     }
 }
 

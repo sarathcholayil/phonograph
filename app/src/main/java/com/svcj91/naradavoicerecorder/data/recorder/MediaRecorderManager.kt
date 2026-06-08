@@ -6,9 +6,17 @@ import android.os.Build
 import android.util.Log
 import com.svcj91.naradavoicerecorder.domain.model.AudioRecorder
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,12 +30,20 @@ class MediaRecorderManager @Inject constructor(
 ) : AudioRecorder {
 
     private val _isRecording = MutableStateFlow(false)
-    override val isRecording: Flow<Boolean> = _isRecording.asStateFlow()
+    override val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+
+    private val _isPaused = MutableStateFlow(false)
+    override val isPaused: StateFlow<Boolean> = _isPaused.asStateFlow()
+
+    private val _elapsedTimeSeconds = MutableStateFlow(0L)
+    override val elapsedTimeSeconds: StateFlow<Long> = _elapsedTimeSeconds.asStateFlow()
 
     private val _errorEvents = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 5)
     override val errorEvents: Flow<String> = _errorEvents
 
     private var recorder: MediaRecorder? = null
+    private var timerJob: Job? = null
+    private val managerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private fun createMediaRecorder(): MediaRecorder {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -80,6 +96,8 @@ class MediaRecorderManager @Inject constructor(
                 start()
             }
             _isRecording.value = true
+            _isPaused.value = false
+            startTimer()
             Log.d(TAG, "Recording started successfully. Saving to: ${outputFile.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start audio recording", e)
@@ -92,6 +110,7 @@ class MediaRecorderManager @Inject constructor(
             _errorEvents.tryEmit(errorMsg)
             releaseRecorder()
             _isRecording.value = false
+            _isPaused.value = false
             throw e
         }
     }
@@ -110,9 +129,56 @@ class MediaRecorderManager @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping MediaRecorder", e)
         } finally {
+            stopTimer()
             releaseRecorder()
             _isRecording.value = false
+            _isPaused.value = false
         }
+    }
+
+    override fun pause() {
+        if (!_isRecording.value || _isPaused.value) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                recorder?.pause()
+                _isPaused.value = true
+                Log.d(TAG, "Recording paused successfully.")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error pausing MediaRecorder", e)
+        }
+    }
+
+    override fun resume() {
+        if (!_isRecording.value || !_isPaused.value) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                recorder?.resume()
+                _isPaused.value = false
+                Log.d(TAG, "Recording resumed successfully.")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error resuming MediaRecorder", e)
+        }
+    }
+
+    private fun startTimer() {
+        timerJob?.cancel()
+        _elapsedTimeSeconds.value = 0L
+        timerJob = managerScope.launch {
+            while (isActive) {
+                delay(1000)
+                if (!_isPaused.value) {
+                    _elapsedTimeSeconds.value += 1
+                }
+            }
+        }
+    }
+
+    private fun stopTimer() {
+        timerJob?.cancel()
+        timerJob = null
+        _elapsedTimeSeconds.value = 0L
     }
 
     private fun releaseRecorder() {

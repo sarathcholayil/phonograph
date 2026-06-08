@@ -7,7 +7,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,10 +29,21 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.svcj91.naradavoicerecorder.R
 import com.svcj91.naradavoicerecorder.ui.theme.CoolGrayBlue
 import com.svcj91.naradavoicerecorder.ui.theme.CoralRed
 import com.svcj91.naradavoicerecorder.ui.theme.DarkBg
 import com.svcj91.naradavoicerecorder.ui.theme.LightGrayBlue
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import android.os.PowerManager
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
 import kotlin.math.sin
 
@@ -41,12 +55,38 @@ fun RecorderScreen(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val isRecording by viewModel.isRecording.collectAsState()
+    val isPaused by viewModel.isPaused.collectAsState()
     val elapsedTimeSeconds by viewModel.elapsedTimeSeconds.collectAsState()
     val recentCount by viewModel.recentRecordingsCount.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var showRationaleDialog by remember { mutableStateOf(false) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isBatteryOptimizing by remember { mutableStateOf(false) }
+    
+    val sharedPrefs = remember {
+        context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+    }
+    var isBatteryBannerDismissed by remember {
+        mutableStateOf(sharedPrefs.getBoolean("battery_banner_dismissed", false))
+    }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                isBatteryOptimizing = pm?.isIgnoringBatteryOptimizations(context.packageName) == false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.errorEvents.collect { error ->
@@ -57,9 +97,9 @@ fun RecorderScreen(
         }
     }
 
-    // Pulsing animation for the record button when recording
+    // Pulsing animation for the record button when recording and not paused
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val buttonScale by if (isRecording) {
+    val buttonScale by if (isRecording && !isPaused) {
         infiniteTransition.animateFloat(
             initialValue = 1f,
             targetValue = 1.12f,
@@ -73,8 +113,8 @@ fun RecorderScreen(
         remember { mutableStateOf(1f) }
     }
 
-    // Pulse alpha for background glows
-    val glowAlpha by if (isRecording) {
+    // Pulse alpha for background glows when recording and not paused; static glow when paused
+    val glowAlpha by if (isRecording && !isPaused) {
         infiniteTransition.animateFloat(
             initialValue = 0.15f,
             targetValue = 0.35f,
@@ -84,8 +124,25 @@ fun RecorderScreen(
             ),
             label = "glowAlpha"
         )
+    } else if (isRecording && isPaused) {
+        remember { mutableStateOf(0.15f) }
     } else {
         remember { mutableStateOf(0f) }
+    }
+
+    // Pulsing animation for the resume button when paused
+    val resumeButtonScale by if (isRecording && isPaused) {
+        infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.15f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "resumeButtonScale"
+        )
+    } else {
+        remember { mutableStateOf(1f) }
     }
 
     if (showRationaleDialog) {
@@ -125,6 +182,43 @@ fun RecorderScreen(
         )
     }
 
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = {
+                Text(
+                    text = "Discard Recording?",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = LightGrayBlue
+                )
+            },
+            text = {
+                Text(
+                    text = "This will permanently delete the current recording session.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = CoolGrayBlue
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDiscardDialog = false
+                        viewModel.discardRecording()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CoralRed)
+                ) {
+                    Text("Discard", color = LightGrayBlue)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) {
+                    Text("Cancel", color = CoolGrayBlue)
+                }
+            },
+            containerColor = Color(0xFF2B2D42)
+        )
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -139,6 +233,15 @@ fun RecorderScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(top = 28.dp)
             ) {
+                Image(
+                    painter = painterResource(id = R.drawable.app_icon),
+                    contentDescription = "Brand Icon",
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.2f))
+                )
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "NARADA",
                     style = MaterialTheme.typography.displayLarge.copy(
@@ -202,15 +305,95 @@ fun RecorderScreen(
                         }
                     }
                 }
+
+                if (hasPermissions && isBatteryOptimizing && !isBatteryBannerDismissed) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        color = Color(0xFFFFB703).copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFB703).copy(alpha = 0.4f)),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Warning,
+                                contentDescription = "Battery Warning",
+                                tint = Color(0xFFFFB703),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Battery Optimization Active",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = LightGrayBlue
+                                )
+                                Text(
+                                    text = "App may be terminated in background. Disable optimizations for uninterrupted recording.",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                    color = CoolGrayBlue
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        try {
+                                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB703)),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text(
+                                        text = "Disable",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = DarkBg
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        sharedPrefs.edit().putBoolean("battery_banner_dismissed", true).apply()
+                                        isBatteryBannerDismissed = true
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(24.dp)
+                                ) {
+                                    Text(
+                                        text = "Dismiss",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 10.sp
+                                        ),
+                                        color = CoolGrayBlue
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Middle Section: Waveform visualizer & Timer
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             ) {
                 // Waveform visualizer
-                AnimatedWaveform(isRecording = isRecording)
+                AnimatedWaveform(isRecording = isRecording && !isPaused)
 
                 Spacer(modifier = Modifier.height(32.dp))
 
@@ -234,30 +417,48 @@ fun RecorderScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        val statusDotAlpha by infiniteTransition.animateFloat(
-                            initialValue = 0.2f,
-                            targetValue = 1f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(durationMillis = 600, easing = LinearEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "statusDotAlpha"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(CoralRed.copy(alpha = statusDotAlpha))
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "RECORDING",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 1.5.sp
-                            ),
-                            color = CoralRed
-                        )
+                        if (isPaused) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(CoolGrayBlue)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "PAUSED",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 1.5.sp
+                                ),
+                                color = CoolGrayBlue
+                            )
+                        } else {
+                            val statusDotAlpha by infiniteTransition.animateFloat(
+                                initialValue = 0.2f,
+                                targetValue = 1f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(durationMillis = 600, easing = LinearEasing),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "statusDotAlpha"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(CoralRed.copy(alpha = statusDotAlpha))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "RECORDING",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 1.5.sp
+                                ),
+                                color = CoralRed
+                            )
+                        }
                     }
                 } else {
                     Text(
@@ -278,65 +479,125 @@ fun RecorderScreen(
                     .fillMaxWidth()
                     .padding(bottom = 32.dp)
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(160.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(160.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Outer glow effect
-                    if (isRecording) {
-                        Box(
-                            modifier = Modifier
-                                .size(136.dp)
-                                .clip(CircleShape)
-                                .background(CoralRed.copy(alpha = glowAlpha))
-                        )
-                    }
-
-                    // Main Record Button
+                    // Left: Pause/Resume button slot
                     Box(
-                        modifier = Modifier
-                            .size(96.dp)
-                            .scale(buttonScale)
-                            .clip(CircleShape)
-                            .background(
-                                if (hasPermissions) {
-                                    Brush.linearGradient(
-                                        colors = listOf(CoralRed, Color(0xFFD90429))
-                                    )
-                                } else {
-                                    Brush.linearGradient(
-                                        colors = listOf(CoolGrayBlue.copy(alpha = 0.4f), CoolGrayBlue.copy(alpha = 0.2f))
-                                    )
-                                }
-                            )
-                            .clickable {
-                                if (!hasPermissions) {
-                                    showRationaleDialog = true
-                                } else {
-                                    if (isRecording) {
-                                        viewModel.stopRecording()
-                                    } else {
-                                        viewModel.startRecording()
-                                    }
-                                }
-                            },
+                        modifier = Modifier.weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         if (isRecording) {
-                            // Stop Icon: Rounded square
-                            Surface(
-                                modifier = Modifier.size(24.dp),
-                                shape = MaterialTheme.shapes.small,
-                                color = LightGrayBlue
-                            ) {}
-                        } else {
-                            // Record Icon: Mic
-                            Icon(
-                                imageVector = Icons.Rounded.Mic,
-                                contentDescription = "Start Recording",
-                                tint = if (hasPermissions) LightGrayBlue else LightGrayBlue.copy(alpha = 0.4f),
-                                modifier = Modifier.size(36.dp)
+                            IconButton(
+                                onClick = {
+                                    if (isPaused) {
+                                        viewModel.resumeRecording()
+                                    } else {
+                                        viewModel.pauseRecording()
+                                    }
+                                },
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .scale(resumeButtonScale)
+                                    .clip(CircleShape)
+                                    .background(if (isPaused) Color(0xFF2ECC71) else Color(0xFF2B2D42))
+                            ) {
+                                Icon(
+                                    imageVector = if (isPaused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                                    contentDescription = if (isPaused) "Resume" else "Pause",
+                                    tint = if (isPaused) DarkBg else LightGrayBlue,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Center: Record/Stop Button
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(160.dp)
+                    ) {
+                        // Outer glow effect
+                        if (isRecording) {
+                            Box(
+                                modifier = Modifier
+                                    .size(136.dp)
+                                    .clip(CircleShape)
+                                    .background(CoralRed.copy(alpha = glowAlpha))
                             )
+                        }
+
+                        // Main Record Button
+                        Box(
+                            modifier = Modifier
+                                .size(96.dp)
+                                .scale(buttonScale)
+                                .clip(CircleShape)
+                                .background(
+                                    if (hasPermissions) {
+                                        Brush.linearGradient(
+                                            colors = listOf(CoralRed, Color(0xFFD90429))
+                                        )
+                                    } else {
+                                        Brush.linearGradient(
+                                            colors = listOf(CoolGrayBlue.copy(alpha = 0.4f), CoolGrayBlue.copy(alpha = 0.2f))
+                                        )
+                                    }
+                                )
+                                .clickable {
+                                    if (!hasPermissions) {
+                                        showRationaleDialog = true
+                                    } else {
+                                        if (isRecording) {
+                                            viewModel.stopRecording()
+                                        } else {
+                                            viewModel.startRecording()
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isRecording) {
+                                // Stop Icon: Rounded square
+                                Surface(
+                                    modifier = Modifier.size(24.dp),
+                                    shape = MaterialTheme.shapes.small,
+                                    color = LightGrayBlue
+                                ) {}
+                            } else {
+                                // Record Icon: Mic
+                                Icon(
+                                    imageVector = Icons.Rounded.Mic,
+                                    contentDescription = "Start Recording",
+                                    tint = if (hasPermissions) LightGrayBlue else LightGrayBlue.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Right: Discard Button slot
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isRecording) {
+                            IconButton(
+                                onClick = { showDiscardDialog = true },
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF2B2D42))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Delete,
+                                    contentDescription = "Discard Recording",
+                                    tint = CoralRed,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
                 }
