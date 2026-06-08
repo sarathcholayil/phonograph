@@ -2,19 +2,16 @@ package com.svcj91.naradavoicerecorder
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.platform.LocalContext
+import com.svcj91.naradavoicerecorder.presentation.PermissionHelper
+import com.svcj91.naradavoicerecorder.presentation.navigation.AppNavHost
 import com.svcj91.naradavoicerecorder.ui.theme.NaradaVoiceRecorderTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -25,40 +22,32 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NaradaVoiceRecorderTheme {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = MaterialTheme.colorScheme.background
-                ) { innerPadding ->
-                    PlaceholderScreen(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    )
+                val context = LocalContext.current
+                var hasPermissions by remember {
+                    mutableStateOf(PermissionHelper.hasAllRequiredPermissions(context))
                 }
+
+                val permissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestMultiplePermissions()
+                ) { permissions ->
+                    // At a minimum, RECORD_AUDIO is required to run the recorder.
+                    val audioGranted = permissions[android.Manifest.permission.RECORD_AUDIO] == true
+                    hasPermissions = audioGranted
+                }
+
+                // Check permissions on start
+                LaunchedEffect(Unit) {
+                    hasPermissions = PermissionHelper.hasRecordAudioPermission(context)
+                }
+
+                AppNavHost(
+                    hasPermissions = hasPermissions,
+                    onRequestPermissions = {
+                        permissionLauncher.launch(PermissionHelper.getRequiredPermissions().toTypedArray())
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
-    }
-}
-
-@Composable
-fun PlaceholderScreen(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "Narada Voice Recorder Initialized",
-            style = MaterialTheme.typography.displayLarge,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PlaceholderScreenPreview() {
-    NaradaVoiceRecorderTheme {
-        PlaceholderScreen()
     }
 }
