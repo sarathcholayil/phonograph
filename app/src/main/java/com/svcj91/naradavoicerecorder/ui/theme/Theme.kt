@@ -12,32 +12,40 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = LightGrayBlue,
+    onPrimary = DarkNavy,
+    secondary = CoolGrayBlue,
+    onSecondary = DarkNavy,
+    tertiary = CoralRed,
+    onTertiary = DarkNavy,
+    background = DarkBg,
+    onBackground = LightGrayBlue,
+    surface = DarkSurface,
+    onSurface = LightGrayBlue,
+    error = DeepRed,
+    onError = LightGrayBlue
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = DarkNavy,
+    onPrimary = LightGrayBlue,
+    secondary = CoolGrayBlue,
+    onSecondary = DarkNavy,
+    tertiary = CoralRed,
+    onTertiary = LightGrayBlue,
+    background = LightGrayBlue,
+    onBackground = DarkNavy,
+    surface = LightGrayBlue,
+    onSurface = DarkNavy,
+    error = DeepRed,
+    onError = LightGrayBlue
 )
 
 @Composable
 fun NaradaVoiceRecorderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    // Set dynamicColor to false by default to respect custom premium brand colors
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -45,7 +53,6 @@ fun NaradaVoiceRecorderTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
@@ -53,6 +60,7 @@ fun NaradaVoiceRecorderTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = Shapes,
         content = content
     )
 }
