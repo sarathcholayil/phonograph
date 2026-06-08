@@ -51,95 +51,116 @@ fun RecordingsScreen(
     val recordings by viewModel.recordings.collectAsState()
     val playbackState by viewModel.playbackState.collectAsState()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(DarkBg)
-            .padding(horizontal = 16.dp)
-    ) {
-        // Title block
-        Spacer(modifier = Modifier.height(28.dp))
-        Text(
-            text = "RECORDINGS",
-            style = MaterialTheme.typography.displayLarge.copy(
-                fontSize = 24.sp,
-                letterSpacing = 4.sp,
-                fontWeight = FontWeight.Bold
-            ),
-            color = LightGrayBlue,
-            modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
-        )
+    val snackbarHostState = remember { SnackbarHostState() }
 
-        if (recordings.isEmpty()) {
-            EmptyState()
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 24.dp)
-            ) {
-                items(
-                    items = recordings,
-                    key = { it.id }
-                ) { recording ->
-                    val dismissState = rememberSwipeToDismissBoxState(
-                        confirmValueChange = { dismissValue ->
-                            if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
-                                viewModel.deleteRecording(recording)
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                    )
+    LaunchedEffect(Unit) {
+        viewModel.errorEvents.collect { error ->
+            snackbarHostState.showSnackbar(
+                message = error,
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
 
-                    SwipeToDismissBox(
-                        state = dismissState,
-                        backgroundContent = {
-                            val color = when (dismissState.dismissDirection) {
-                                SwipeToDismissBoxValue.EndToStart -> CoralRed
-                                else -> Color.Transparent
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(MaterialTheme.shapes.medium)
-                                    .background(color)
-                                    .padding(horizontal = 24.dp),
-                                contentAlignment = Alignment.CenterEnd
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Delete,
-                                    contentDescription = "Delete",
-                                    tint = LightGrayBlue,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        },
-                        enableDismissFromStartToEnd = false,
-                        modifier = Modifier.animateItem()
-                    ) {
-                        RecordingCard(
-                            recording = recording,
-                            playbackState = playbackState,
-                            onPlayPause = {
-                                if (playbackState.activeUri == recording.uri && playbackState.isPlaying) {
-                                    viewModel.pause()
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(DarkBg)
+                .padding(horizontal = 16.dp)
+        ) {
+            // Title block
+            Spacer(modifier = Modifier.height(28.dp))
+            Text(
+                text = "RECORDINGS",
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontSize = 24.sp,
+                    letterSpacing = 4.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                color = LightGrayBlue,
+                modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
+            )
+
+            if (recordings.isEmpty()) {
+                EmptyState()
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
+                    items(
+                        items = recordings,
+                        key = { it.id }
+                    ) { recording ->
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = { dismissValue ->
+                                if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
+                                    viewModel.deleteRecording(recording)
+                                    true
                                 } else {
-                                    viewModel.play(recording)
+                                    false
                                 }
-                            },
-                            onSeek = { position ->
-                                viewModel.seekTo(position)
-                            },
-                            onShare = {
-                                shareRecording(context, viewModel.getShareIntent(recording))
                             }
                         )
+
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            backgroundContent = {
+                                val color = when (dismissState.dismissDirection) {
+                                    SwipeToDismissBoxValue.EndToStart -> CoralRed
+                                    else -> Color.Transparent
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(MaterialTheme.shapes.medium)
+                                        .background(color)
+                                        .padding(horizontal = 24.dp),
+                                    contentAlignment = Alignment.CenterEnd
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Delete,
+                                        contentDescription = "Delete",
+                                        tint = LightGrayBlue,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            },
+                            enableDismissFromStartToEnd = false,
+                            modifier = Modifier.animateItem()
+                        ) {
+                            RecordingCard(
+                                recording = recording,
+                                playbackState = playbackState,
+                                onPlayPause = {
+                                    if (playbackState.activeUri == recording.uri && playbackState.isPlaying) {
+                                        viewModel.pause()
+                                    } else {
+                                        viewModel.play(recording)
+                                    }
+                                },
+                                onSeek = { position ->
+                                    viewModel.seekTo(position)
+                                },
+                                onShare = {
+                                    shareRecording(context, viewModel.getShareIntent(recording))
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
+
+        // Floating Snackbar overlay
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+        )
     }
 }
 

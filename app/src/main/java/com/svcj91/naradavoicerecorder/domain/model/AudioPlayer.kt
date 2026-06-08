@@ -42,4 +42,9 @@ interface AudioPlayer {
      * Flow emitting updates to the current [PlaybackState].
      */
     val playbackState: Flow<PlaybackState>
+
+    /**
+     * Flow emitting error messages encountered during audio playback.
+     */
+    val errorEvents: Flow<String>
 }

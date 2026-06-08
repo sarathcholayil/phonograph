@@ -28,6 +28,9 @@ class ExoPlayerManager @Inject constructor(
     private val _playbackState = MutableStateFlow(PlaybackState())
     override val playbackState: Flow<PlaybackState> = _playbackState.asStateFlow()
 
+    private val _errorEvents = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 5)
+    override val errorEvents: Flow<String> = _errorEvents
+
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var player: ExoPlayer? = null
     private var activeUri: Uri? = null
@@ -50,6 +53,12 @@ class ExoPlayerManager @Inject constructor(
                 stopProgressUpdates()
             }
             updateState()
+        }
+
+        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            Log.e(TAG, "ExoPlayer error: ${error.message}", error)
+            _errorEvents.tryEmit("Failed to play audio: file may be corrupt or deleted")
+            stop()
         }
     }
 

@@ -3,6 +3,7 @@ package com.svcj91.naradavoicerecorder.presentation.recordings
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.svcj91.naradavoicerecorder.domain.model.AudioPlayer
 import com.svcj91.naradavoicerecorder.domain.model.PlaybackState
 import com.svcj91.naradavoicerecorder.domain.model.Recording
 import com.svcj91.naradavoicerecorder.domain.usecase.DeleteRecordingUseCase
@@ -14,14 +15,18 @@ import com.svcj91.naradavoicerecorder.domain.usecase.SeekAudioUseCase
 import com.svcj91.naradavoicerecorder.domain.usecase.ShareRecordingUseCase
 import com.svcj91.naradavoicerecorder.domain.usecase.StopAudioUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class RecordingsViewModel @Inject constructor(
+    private val audioPlayer: AudioPlayer,
     private val getRecordingsUseCase: GetRecordingsUseCase,
     private val getPlaybackStateUseCase: GetPlaybackStateUseCase,
     private val playAudioUseCase: PlayAudioUseCase,
@@ -47,6 +52,18 @@ class RecordingsViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = PlaybackState()
         )
+
+    // Exposed shared flow for playback error events
+    private val _errorEvents = MutableSharedFlow<String>(extraBufferCapacity = 5)
+    val errorEvents: SharedFlow<String> = _errorEvents.asSharedFlow()
+
+    init {
+        viewModelScope.launch {
+            audioPlayer.errorEvents.collect { error ->
+                _errorEvents.emit(error)
+            }
+        }
+    }
 
     fun play(recording: Recording) {
         playAudioUseCase(recording.uri)
@@ -76,5 +93,10 @@ class RecordingsViewModel @Inject constructor(
 
     fun getShareIntent(recording: Recording): Intent {
         return shareRecordingUseCase(recording)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stop()
     }
 }

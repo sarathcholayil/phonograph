@@ -27,6 +27,7 @@ import com.svcj91.naradavoicerecorder.ui.theme.DarkSurface
 fun AppNavHost(
     hasPermissions: Boolean,
     onRequestPermissions: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val navController = rememberNavController()
@@ -99,7 +100,8 @@ fun AppNavHost(
                 RecorderScreen(
                     viewModel = recorderViewModel,
                     hasPermissions = hasPermissions,
-                    onRequestPermissions = onRequestPermissions
+                    onRequestPermissions = onRequestPermissions,
+                    onOpenSettings = onOpenSettings
                 )
             }
             composable(Screen.Recordings.route) {

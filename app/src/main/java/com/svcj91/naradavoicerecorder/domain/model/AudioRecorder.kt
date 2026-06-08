@@ -22,4 +22,9 @@ interface AudioRecorder {
      * Flow emitting the current recording state (true if recording, false otherwise).
      */
     val isRecording: Flow<Boolean>
+
+    /**
+     * Flow emitting error messages encountered by the recorder.
+     */
+    val errorEvents: Flow<String>
 }

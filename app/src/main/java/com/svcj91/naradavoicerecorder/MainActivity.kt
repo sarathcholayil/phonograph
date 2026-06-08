@@ -1,5 +1,7 @@
 package com.svcj91.naradavoicerecorder
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -40,11 +42,22 @@ class MainActivity : ComponentActivity() {
                     hasPermissions = PermissionHelper.hasRecordAudioPermission(context)
                 }
 
+                val openSettings = {
+                    val intent = Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", packageName, null)
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                }
+
                 AppNavHost(
                     hasPermissions = hasPermissions,
                     onRequestPermissions = {
                         permissionLauncher.launch(PermissionHelper.getRequiredPermissions().toTypedArray())
                     },
+                    onOpenSettings = openSettings,
                     modifier = Modifier.fillMaxSize()
                 )
             }

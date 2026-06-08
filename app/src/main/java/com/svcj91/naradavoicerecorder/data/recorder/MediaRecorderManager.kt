@@ -24,6 +24,9 @@ class MediaRecorderManager @Inject constructor(
     private val _isRecording = MutableStateFlow(false)
     override val isRecording: Flow<Boolean> = _isRecording.asStateFlow()
 
+    private val _errorEvents = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 5)
+    override val errorEvents: Flow<String> = _errorEvents
+
     private var recorder: MediaRecorder? = null
 
     private fun createMediaRecorder(): MediaRecorder {
@@ -42,11 +45,16 @@ class MediaRecorderManager @Inject constructor(
         }
 
         try {
-            // Ensure parent directory exists
-            outputFile.parentFile?.let { parent ->
-                if (!parent.exists()) {
-                    parent.mkdirs()
-                }
+            // Check storage availability & write protection
+            val parent = outputFile.parentFile
+            if (parent == null) {
+                throw java.io.IOException("Invalid output directory path")
+            }
+            if (!parent.exists() && !parent.mkdirs()) {
+                throw java.io.IOException("Storage directory is write-protected or unmounted")
+            }
+            if (parent.freeSpace < 5 * 1024 * 1024) { // Less than 5 MB
+                throw java.io.IOException("ENOSPC: Storage is full")
             }
 
             recorder = createMediaRecorder().apply {
@@ -54,6 +62,20 @@ class MediaRecorderManager @Inject constructor(
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
                 setOutputFile(outputFile.absolutePath)
+                
+                setOnErrorListener { _, what, extra ->
+                    Log.e(TAG, "MediaRecorder error: what=$what, extra=$extra")
+                    _errorEvents.tryEmit("Recording failed due to hardware/system error")
+                    stop()
+                }
+                
+                setOnInfoListener { _, what, extra ->
+                    if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED) {
+                        _errorEvents.tryEmit("Storage limit reached")
+                        stop()
+                    }
+                }
+                
                 prepare()
                 start()
             }
@@ -61,6 +83,13 @@ class MediaRecorderManager @Inject constructor(
             Log.d(TAG, "Recording started successfully. Saving to: ${outputFile.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start audio recording", e)
+            val errorMsg = when {
+                e is java.io.FileNotFoundException -> "Storage directory is write-protected or unmounted"
+                e.message?.contains("ENOSPC") == true -> "Storage is full"
+                e.message?.contains("write-protected") == true -> "Storage directory is write-protected"
+                else -> "Microphone is busy or failed to initialize"
+            }
+            _errorEvents.tryEmit(errorMsg)
             releaseRecorder()
             _isRecording.value = false
             throw e

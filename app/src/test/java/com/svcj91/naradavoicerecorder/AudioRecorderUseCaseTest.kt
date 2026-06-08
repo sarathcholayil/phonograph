@@ -22,6 +22,7 @@ import java.io.File
 class FakeAudioRecorder : AudioRecorder {
     private val _isRecording = MutableStateFlow(false)
     override val isRecording: Flow<Boolean> = _isRecording.asStateFlow()
+    override val errorEvents: Flow<String> = kotlinx.coroutines.flow.MutableSharedFlow<String>()
 
     var lastOutputFile: File? = null
     var startCalledCount = 0
