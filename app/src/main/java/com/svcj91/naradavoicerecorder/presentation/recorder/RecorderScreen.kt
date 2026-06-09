@@ -173,7 +173,7 @@ fun RecorderScreen(
             },
             text = {
                 Text(
-                    text = "Narada requires access to the microphone to capture voice notes. Please allow access when prompted.",
+                    text = "Phonograph requires access to the microphone to capture voice notes. Please allow access when prompted.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = CoolGrayBlue
                 )
@@ -210,7 +210,7 @@ fun RecorderScreen(
             },
             text = {
                 Text(
-                    text = "Narada requires access to the microphone to capture voice notes. Please authorize access in App Settings.",
+                    text = "Phonograph requires access to the microphone to capture voice notes. Please authorize access in App Settings.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = CoolGrayBlue
                 )
@@ -247,7 +247,7 @@ fun RecorderScreen(
             },
             text = {
                 Text(
-                    text = "Narada requires notification permission to run the recording background service and show status updates. Please allow when prompted.",
+                    text = "Phonograph requires notification permission to run the recording background service and show status updates. Please allow when prompted.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = CoolGrayBlue
                 )
@@ -284,7 +284,7 @@ fun RecorderScreen(
             },
             text = {
                 Text(
-                    text = "Narada requires notification permission to run the recording background service. Please authorize notifications in App Settings.",
+                    text = "Phonograph requires notification permission to run the recording background service. Please authorize notifications in App Settings.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = CoolGrayBlue
                 )
@@ -407,7 +407,7 @@ fun RecorderScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "NARADA",
+                    text = "PHONOGRAPH",
                     style = MaterialTheme.typography.displayLarge.copy(
                         fontSize = 24.sp,
                         letterSpacing = 4.sp,
