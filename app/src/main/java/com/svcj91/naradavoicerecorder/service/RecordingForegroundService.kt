@@ -15,6 +15,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.svcj91.naradavoicerecorder.MainActivity
+import com.svcj91.naradavoicerecorder.R
 import com.svcj91.naradavoicerecorder.domain.model.AudioRecorder
 import com.svcj91.naradavoicerecorder.domain.repository.RecordingRepository
 import dagger.hilt.android.AndroidEntryPoint
@@ -243,7 +244,7 @@ class RecordingForegroundService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(formattedTime)
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setSmallIcon(R.drawable.app_icon)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setSilent(true)
