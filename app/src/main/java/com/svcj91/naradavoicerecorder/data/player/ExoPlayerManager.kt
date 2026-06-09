@@ -93,6 +93,7 @@ class ExoPlayerManager @Inject constructor(
                 updateState()
             } catch (e: Exception) {
                 Log.e(TAG, "Error in play", e)
+                _errorEvents.tryEmit("Failed to play recording: ${e.localizedMessage ?: "unknown error"}")
             }
         }
     }
@@ -169,9 +170,10 @@ class ExoPlayerManager @Inject constructor(
     }
 
     /**
-     * Release player resources when the application is terminated or the manager is cleared.
+     * Release player resources. The player will be lazily re-created by
+     * [getOrCreatePlayer] on the next [play] call.
      */
-    fun release() {
+    override fun release() {
         mainScope.launch {
             try {
                 Log.d(TAG, "Releasing ExoPlayer resources")
@@ -181,7 +183,6 @@ class ExoPlayerManager @Inject constructor(
                 player = null
                 activeUri = null
                 updateState()
-                mainScope.cancel()
             } catch (e: Exception) {
                 Log.e(TAG, "Error releasing ExoPlayer", e)
             }

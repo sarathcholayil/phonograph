@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.svcj91.naradavoicerecorder.presentation.PermissionHelper
 import com.svcj91.naradavoicerecorder.presentation.navigation.AppNavHost
 import com.svcj91.naradavoicerecorder.ui.theme.NaradaVoiceRecorderTheme
@@ -35,6 +38,18 @@ class MainActivity : ComponentActivity() {
                     // At a minimum, RECORD_AUDIO is required to run the recorder.
                     val audioGranted = permissions[android.Manifest.permission.RECORD_AUDIO] == true
                     hasPermissions = audioGranted
+                }
+
+                // Re-check permissions every time the Activity resumes (e.g. returning from Settings)
+                val lifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME) {
+                            hasPermissions = PermissionHelper.hasRecordAudioPermission(context)
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                 }
 
                 // Check and request permissions on start

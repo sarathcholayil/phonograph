@@ -3,6 +3,7 @@ package com.svcj91.naradavoicerecorder.data.recorder
 import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import com.svcj91.naradavoicerecorder.domain.model.AudioRecorder
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -44,6 +45,9 @@ class MediaRecorderManager @Inject constructor(
     private var recorder: MediaRecorder? = null
     private var timerJob: Job? = null
     private val managerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var recordingStartRealtime = 0L
+    private var pausedAtRealtime = 0L
+    private var totalPausedDuration = 0L
 
     private fun createMediaRecorder(): MediaRecorder {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -81,8 +85,16 @@ class MediaRecorderManager @Inject constructor(
                 
                 setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "MediaRecorder error: what=$what, extra=$extra")
-                    _errorEvents.tryEmit("Recording failed due to hardware/system error")
-                    stop()
+                    // Post to main thread for thread-safe state mutation.
+                    // Use releaseRecorder() instead of stop() — the recorder is
+                    // already in an error state; calling stop() would throw.
+                    managerScope.launch {
+                        _errorEvents.tryEmit("Recording failed due to hardware/system error")
+                        stopTimer()
+                        releaseRecorder()
+                        _isRecording.value = false
+                        _isPaused.value = false
+                    }
                 }
                 
                 setOnInfoListener { _, what, extra ->
@@ -141,6 +153,7 @@ class MediaRecorderManager @Inject constructor(
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 recorder?.pause()
+                pausedAtRealtime = SystemClock.elapsedRealtime()
                 _isPaused.value = true
                 Log.d(TAG, "Recording paused successfully.")
             }
@@ -154,6 +167,7 @@ class MediaRecorderManager @Inject constructor(
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 recorder?.resume()
+                totalPausedDuration += SystemClock.elapsedRealtime() - pausedAtRealtime
                 _isPaused.value = false
                 Log.d(TAG, "Recording resumed successfully.")
             }
@@ -164,12 +178,16 @@ class MediaRecorderManager @Inject constructor(
 
     private fun startTimer() {
         timerJob?.cancel()
+        recordingStartRealtime = SystemClock.elapsedRealtime()
+        totalPausedDuration = 0L
         _elapsedTimeSeconds.value = 0L
         timerJob = managerScope.launch {
             while (isActive) {
-                delay(1000)
+                delay(250) // Update 4x/sec for smooth display
                 if (!_isPaused.value) {
-                    _elapsedTimeSeconds.value += 1
+                    val now = SystemClock.elapsedRealtime()
+                    val elapsedMs = now - recordingStartRealtime - totalPausedDuration
+                    _elapsedTimeSeconds.value = elapsedMs / 1000
                 }
             }
         }
@@ -179,6 +197,8 @@ class MediaRecorderManager @Inject constructor(
         timerJob?.cancel()
         timerJob = null
         _elapsedTimeSeconds.value = 0L
+        recordingStartRealtime = 0L
+        totalPausedDuration = 0L
     }
 
     private fun releaseRecorder() {

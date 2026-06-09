@@ -383,7 +383,9 @@ fun RecordingsScreen(
                         onClick = {
                             val newNameTrimmed = renameNewText.trim()
                             if (newNameTrimmed.isNotEmpty()) {
-                                val ext = ".m4a"
+                                val originalName = recordingToRename?.name ?: ""
+                                val originalExt = originalName.substringAfterLast('.', "")
+                                val ext = if (originalExt.isNotEmpty()) ".$originalExt" else ".m4a"
                                 val finalName = if (newNameTrimmed.endsWith(ext, ignoreCase = true)) {
                                     newNameTrimmed
                                 } else {

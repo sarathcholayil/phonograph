@@ -39,6 +39,12 @@ interface AudioPlayer {
     fun stop()
 
     /**
+     * Release all player resources. After calling this, the player must be
+     * re-created before it can be used again.
+     */
+    fun release()
+
+    /**
      * Flow emitting updates to the current [PlaybackState].
      */
     val playbackState: Flow<PlaybackState>

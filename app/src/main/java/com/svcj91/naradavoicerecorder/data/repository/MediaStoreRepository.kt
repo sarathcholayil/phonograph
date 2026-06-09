@@ -19,6 +19,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
@@ -38,7 +39,9 @@ class MediaStoreRepository @Inject constructor(
     override fun getRecordings(): Flow<List<Recording>> = callbackFlow {
         val observer = object : ContentObserver(null) {
             override fun onChange(selfChange: Boolean) {
-                trySend(queryRecordingsList())
+                launch(Dispatchers.IO) {
+                    trySend(queryRecordingsList())
+                }
             }
         }
 
@@ -157,8 +160,14 @@ class MediaStoreRepository @Inject constructor(
     override suspend fun renameRecording(recording: Recording, newName: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val resolver = context.contentResolver
+            val originalExt = recording.name.substringAfterLast('.', "")
+            val finalName = if (originalExt.isNotEmpty() && !newName.endsWith(".$originalExt", ignoreCase = true)) {
+                "$newName.$originalExt"
+            } else {
+                newName
+            }
             val contentValues = ContentValues().apply {
-                put(MediaStore.Audio.Media.DISPLAY_NAME, newName)
+                put(MediaStore.Audio.Media.DISPLAY_NAME, finalName)
             }
             val rowsUpdated = resolver.update(recording.uri, contentValues, null, null)
             rowsUpdated > 0

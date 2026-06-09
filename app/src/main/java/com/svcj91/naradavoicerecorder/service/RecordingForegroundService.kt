@@ -20,8 +20,10 @@ import com.svcj91.naradavoicerecorder.domain.repository.RecordingRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 import javax.inject.Inject
@@ -155,17 +157,19 @@ class RecordingForegroundService : Service() {
         currentTempFile = null
 
         if (tempFile != null && tempFile.exists()) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    val recording = recordingRepository.publishRecording(tempFile)
-                    Log.d(TAG, "Recording published: $recording")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error publishing recording", e)
+            serviceScope.launch {
+                withContext(Dispatchers.IO + NonCancellable) {
+                    try {
+                        val recording = recordingRepository.publishRecording(tempFile)
+                        Log.d(TAG, "Recording published: $recording")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error publishing recording", e)
+                    }
                 }
             }
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
             @Suppress("DEPRECATION")
@@ -192,7 +196,7 @@ class RecordingForegroundService : Service() {
             }
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
             @Suppress("DEPRECATION")
