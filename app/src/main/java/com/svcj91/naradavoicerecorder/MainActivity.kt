@@ -37,9 +37,13 @@ class MainActivity : ComponentActivity() {
                     hasPermissions = audioGranted
                 }
 
-                // Check permissions on start
+                // Check and request permissions on start
                 LaunchedEffect(Unit) {
-                    hasPermissions = PermissionHelper.hasRecordAudioPermission(context)
+                    val hasAudio = PermissionHelper.hasRecordAudioPermission(context)
+                    hasPermissions = hasAudio
+                    if (!PermissionHelper.hasAllRequiredPermissions(context)) {
+                        permissionLauncher.launch(PermissionHelper.getRequiredPermissions().toTypedArray())
+                    }
                 }
 
                 val openSettings = {

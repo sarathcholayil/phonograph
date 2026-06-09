@@ -44,6 +44,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
+import androidx.core.app.ActivityCompat
 import java.util.Locale
 import kotlin.math.sin
 
@@ -63,6 +65,7 @@ fun RecorderScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     var showRationaleDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
     var showDiscardDialog by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -157,7 +160,7 @@ fun RecorderScreen(
             },
             text = {
                 Text(
-                    text = "Narada requires access to the microphone to capture voice notes. Please authorize access in App Settings.",
+                    text = "Narada requires access to the microphone to capture voice notes. Please allow access when prompted.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = CoolGrayBlue
                 )
@@ -166,6 +169,43 @@ fun RecorderScreen(
                 Button(
                     onClick = {
                         showRationaleDialog = false
+                        onRequestPermissions()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CoralRed)
+                ) {
+                    Text("Grant", color = LightGrayBlue)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRationaleDialog = false }) {
+                    Text("Cancel", color = CoolGrayBlue)
+                }
+            },
+            containerColor = Color(0xFF2B2D42)
+        )
+    }
+
+    if (showSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showSettingsDialog = false },
+            title = {
+                Text(
+                    text = "Microphone Access Required",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = LightGrayBlue
+                )
+            },
+            text = {
+                Text(
+                    text = "Narada requires access to the microphone to capture voice notes. Please authorize access in App Settings.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = CoolGrayBlue
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSettingsDialog = false
                         onOpenSettings()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CoralRed)
@@ -174,7 +214,7 @@ fun RecorderScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRationaleDialog = false }) {
+                TextButton(onClick = { showSettingsDialog = false }) {
                     Text("Cancel", color = CoolGrayBlue)
                 }
             },
@@ -291,7 +331,17 @@ fun RecorderScreen(
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
-                                onClick = { showRationaleDialog = true },
+                                onClick = {
+                                    val activity = context as? Activity
+                                    val showRationale = activity?.let {
+                                        ActivityCompat.shouldShowRequestPermissionRationale(it, android.Manifest.permission.RECORD_AUDIO)
+                                    } ?: false
+                                    if (showRationale) {
+                                        showRationaleDialog = true
+                                    } else {
+                                        showSettingsDialog = true
+                                    }
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = CoralRed),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 modifier = Modifier.height(28.dp)
@@ -548,7 +598,15 @@ fun RecorderScreen(
                                 )
                                 .clickable {
                                     if (!hasPermissions) {
-                                        showRationaleDialog = true
+                                        val activity = context as? Activity
+                                        val showRationale = activity?.let {
+                                            ActivityCompat.shouldShowRequestPermissionRationale(it, android.Manifest.permission.RECORD_AUDIO)
+                                        } ?: false
+                                        if (showRationale) {
+                                            showRationaleDialog = true
+                                        } else {
+                                            showSettingsDialog = true
+                                        }
                                     } else {
                                         if (isRecording) {
                                             viewModel.stopRecording()
