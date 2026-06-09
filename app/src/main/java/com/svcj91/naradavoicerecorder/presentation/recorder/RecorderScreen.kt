@@ -920,7 +920,12 @@ fun AnimatedWaveform(
                 (sin(fraction * 12f * Math.PI.toFloat()) * 4f)
             }
 
-            val finalHeight = (2.dp.toPx() + Math.abs(waveValue)).coerceIn(4.dp.toPx(), height)
+            val minHeight = 4.dp.toPx()
+            val finalHeight = if (height > minHeight) {
+                (2.dp.toPx() + Math.abs(waveValue)).coerceIn(minHeight, height)
+            } else {
+                height.coerceAtLeast(0f)
+            }
             val top = midY - finalHeight / 2f
             val left = i * (barWidth + barSpacing)
 
