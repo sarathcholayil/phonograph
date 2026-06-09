@@ -11,7 +11,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.svcj91.naradavoicerecorder"
+        applicationId = "com.svcj91.phonograph"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

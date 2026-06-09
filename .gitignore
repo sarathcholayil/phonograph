@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Keystore files (keep secrets out of version control)
+keystore/
+
+# Release build artifacts
+app/release/
