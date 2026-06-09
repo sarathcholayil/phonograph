@@ -72,6 +72,7 @@ fun RecorderScreen(
     var showNotificationRationaleDialog by remember { mutableStateOf(false) }
     var showNotificationSettingsDialog by remember { mutableStateOf(false) }
     var showDiscardDialog by remember { mutableStateOf(false) }
+    var showBatteryGuideDialog by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var isBatteryOptimizing by remember { mutableStateOf(false) }
@@ -345,6 +346,48 @@ fun RecorderScreen(
         )
     }
 
+    if (showBatteryGuideDialog) {
+        AlertDialog(
+            onDismissRequest = { showBatteryGuideDialog = false },
+            title = {
+                Text(
+                    text = "Battery Optimization",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = LightGrayBlue
+                )
+            },
+            text = {
+                Text(
+                    text = getBatteryOptimizationInstructions(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = CoolGrayBlue
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showBatteryGuideDialog = false
+                        try {
+                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB703))
+                ) {
+                    Text("Go to Settings", color = DarkBg)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatteryGuideDialog = false }) {
+                    Text("Cancel", color = CoolGrayBlue)
+                }
+            },
+            containerColor = Color(0xFF2B2D42)
+        )
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -480,12 +523,7 @@ fun RecorderScreen(
                             ) {
                                 Button(
                                     onClick = {
-                                        try {
-                                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                                            context.startActivity(intent)
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                        }
+                                        showBatteryGuideDialog = true
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB703)),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -955,5 +993,42 @@ private fun formatElapsedTime(seconds: Long): String {
         String.format(Locale.US, "%02d:%02d:%02d", h, m, s)
     } else {
         String.format(Locale.US, "%02d:%02d", m, s)
+    }
+}
+
+private fun getBatteryOptimizationInstructions(): String {
+    val manufacturer = android.os.Build.MANUFACTURER.uppercase(Locale.US)
+    return when {
+        manufacturer.contains("ONEPLUS") || manufacturer.contains("OPPO") || manufacturer.contains("REALME") -> {
+            "To ensure uninterrupted background recording on your device:\n\n" +
+            "1. Tap 'Go to Settings' below.\n" +
+            "2. Go to 'Battery' -> 'More settings' -> 'Optimize battery usage'.\n" +
+            "3. Select 'Narada Voice Recorder' and choose 'Don't optimize' (or 'Unrestricted').\n\n" +
+            "Alternatively, since you already allowed 'Allow background usage', you can just click 'Cancel' and dismiss the banner."
+        }
+        manufacturer.contains("XIAOMI") || manufacturer.contains("REDMI") -> {
+            "To ensure uninterrupted background recording on your device:\n\n" +
+            "1. Tap 'Go to Settings' below.\n" +
+            "2. Under battery settings, find Battery Saver.\n" +
+            "3. Set it to 'No restrictions'."
+        }
+        manufacturer.contains("SAMSUNG") -> {
+            "To ensure uninterrupted background recording on your device:\n\n" +
+            "1. Tap 'Go to Settings' below.\n" +
+            "2. Go to 'Apps' -> 'Narada Voice Recorder' -> 'Battery'.\n" +
+            "3. Select 'Unrestricted'."
+        }
+        manufacturer.contains("HUAWEI") -> {
+            "To ensure uninterrupted background recording on your device:\n\n" +
+            "1. Tap 'Go to Settings' below.\n" +
+            "2. Go to 'Battery' -> 'App launch'.\n" +
+            "3. Find 'Narada Voice Recorder' and change it to 'Manage manually', ensuring 'Run in background' is enabled."
+        }
+        else -> {
+            "To ensure uninterrupted background recording on your device:\n\n" +
+            "1. Tap 'Go to Settings' below.\n" +
+            "2. Locate 'Narada Voice Recorder' in the battery optimization list.\n" +
+            "3. Change its setting to 'Don't optimize' or 'Unrestricted'."
+        }
     }
 }
