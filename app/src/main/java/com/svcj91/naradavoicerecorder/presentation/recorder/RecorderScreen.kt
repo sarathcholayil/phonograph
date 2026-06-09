@@ -46,6 +46,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalContext
 import android.app.Activity
 import androidx.core.app.ActivityCompat
+import android.os.Build
+import androidx.compose.material.icons.rounded.Notifications
+import com.svcj91.naradavoicerecorder.presentation.PermissionHelper
 import java.util.Locale
 import kotlin.math.sin
 
@@ -66,6 +69,8 @@ fun RecorderScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showRationaleDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showNotificationRationaleDialog by remember { mutableStateOf(false) }
+    var showNotificationSettingsDialog by remember { mutableStateOf(false) }
     var showDiscardDialog by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -77,12 +82,19 @@ fun RecorderScreen(
     var isBatteryBannerDismissed by remember {
         mutableStateOf(sharedPrefs.getBoolean("battery_banner_dismissed", false))
     }
+    var hasNotificationPermission by remember {
+        mutableStateOf(PermissionHelper.hasPostNotificationsPermission(context))
+    }
+    var isNotificationBannerDismissed by remember {
+        mutableStateOf(sharedPrefs.getBoolean("notification_banner_dismissed", false))
+    }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
                 isBatteryOptimizing = pm?.isIgnoringBatteryOptimizations(context.packageName) == false
+                hasNotificationPermission = PermissionHelper.hasPostNotificationsPermission(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -215,6 +227,80 @@ fun RecorderScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showSettingsDialog = false }) {
+                    Text("Cancel", color = CoolGrayBlue)
+                }
+            },
+            containerColor = Color(0xFF2B2D42)
+        )
+    }
+
+    if (showNotificationRationaleDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotificationRationaleDialog = false },
+            title = {
+                Text(
+                    text = "Notifications Required",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = LightGrayBlue
+                )
+            },
+            text = {
+                Text(
+                    text = "Narada requires notification permission to run the recording background service and show status updates. Please allow when prompted.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = CoolGrayBlue
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNotificationRationaleDialog = false
+                        onRequestPermissions()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CoralRed)
+                ) {
+                    Text("Grant", color = LightGrayBlue)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotificationRationaleDialog = false }) {
+                    Text("Cancel", color = CoolGrayBlue)
+                }
+            },
+            containerColor = Color(0xFF2B2D42)
+        )
+    }
+
+    if (showNotificationSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotificationSettingsDialog = false },
+            title = {
+                Text(
+                    text = "Notifications Required",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = LightGrayBlue
+                )
+            },
+            text = {
+                Text(
+                    text = "Narada requires notification permission to run the recording background service. Please authorize notifications in App Settings.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = CoolGrayBlue
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNotificationSettingsDialog = false
+                        onOpenSettings()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CoralRed)
+                ) {
+                    Text("Settings", color = LightGrayBlue)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotificationSettingsDialog = false }) {
                     Text("Cancel", color = CoolGrayBlue)
                 }
             },
@@ -415,6 +501,88 @@ fun RecorderScreen(
                                     onClick = {
                                         sharedPrefs.edit().putBoolean("battery_banner_dismissed", true).apply()
                                         isBatteryBannerDismissed = true
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(24.dp)
+                                ) {
+                                    Text(
+                                        text = "Dismiss",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 10.sp
+                                        ),
+                                        color = CoolGrayBlue
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (hasPermissions && !hasNotificationPermission && !isNotificationBannerDismissed) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        color = Color(0xFF3A86FF).copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3A86FF).copy(alpha = 0.4f)),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Notifications,
+                                contentDescription = "Notification Warning",
+                                tint = Color(0xFF3A86FF),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Notifications Disabled",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = LightGrayBlue
+                                )
+                                Text(
+                                    text = "Enable notifications to see status in the background.",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                    color = CoolGrayBlue
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                            val activity = context as? Activity
+                                            val showRationale = activity?.let {
+                                                ActivityCompat.shouldShowRequestPermissionRationale(it, android.Manifest.permission.POST_NOTIFICATIONS)
+                                            } ?: false
+                                            if (showRationale) {
+                                                showNotificationRationaleDialog = true
+                                            } else {
+                                                showNotificationSettingsDialog = true
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3A86FF)),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text(
+                                        text = "Enable",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = LightGrayBlue
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        sharedPrefs.edit().putBoolean("notification_banner_dismissed", true).apply()
+                                        isNotificationBannerDismissed = true
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                     modifier = Modifier.height(24.dp)
