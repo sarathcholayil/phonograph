@@ -1,5 +1,6 @@
 package com.svcj91.naradavoicerecorder.data.repository
 
+import android.content.ClipData
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
@@ -178,9 +179,18 @@ class MediaStoreRepository @Inject constructor(
     }
 
     override fun getShareIntent(recording: Recording): Intent {
+        // Use the concrete MIME type (e.g. audio/mp4 for .m4a) so the Sharesheet
+        // shows a proper audio preview instead of the generic "?" file icon.
+        val mimeType = context.contentResolver.getType(recording.uri) ?: "audio/mp4"
         return Intent(Intent.ACTION_SEND).apply {
-            type = "audio/*"
+            type = mimeType
             putExtra(Intent.EXTRA_STREAM, recording.uri)
+            // Supply the display name explicitly. Without it, the Sharesheet falls
+            // back to the URI's last path segment (the numeric MediaStore id).
+            putExtra(Intent.EXTRA_TITLE, recording.name)
+            // ClipData carries the filename as a label and ensures the read grant
+            // propagates to the receiving app.
+            clipData = ClipData.newUri(context.contentResolver, recording.name, recording.uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     }
