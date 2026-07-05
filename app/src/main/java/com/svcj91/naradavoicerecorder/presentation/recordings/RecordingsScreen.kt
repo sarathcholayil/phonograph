@@ -27,8 +27,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,6 +65,16 @@ fun RecordingsScreen(
     var recordingToDelete by remember { mutableStateOf<Recording?>(null) }
     var recordingToRename by remember { mutableStateOf<Recording?>(null) }
     var renameNewText by remember { mutableStateOf("") }
+
+    // One-time hint teaching the swipe gestures. Persisted in the shared
+    // "app_prefs" store (same store the recorder-screen banners use) so it
+    // stays dismissed across sessions once the user closes it.
+    val sharedPrefs = remember {
+        context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+    }
+    var isSwipeHintDismissed by remember {
+        mutableStateOf(sharedPrefs.getBoolean("swipe_hint_dismissed", false))
+    }
 
     LaunchedEffect(Unit) {
         viewModel.errorEvents.collect { error ->
@@ -217,6 +230,18 @@ fun RecordingsScreen(
                     EmptyState()
                 }
             } else {
+                AnimatedVisibility(
+                    visible = !isSwipeHintDismissed,
+                    exit = shrinkVertically() + androidx.compose.animation.fadeOut()
+                ) {
+                    SwipeHintBanner(
+                        onDismiss = {
+                            sharedPrefs.edit().putBoolean("swipe_hint_dismissed", true).apply()
+                            isSwipeHintDismissed = true
+                        }
+                    )
+                }
+
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -296,6 +321,13 @@ fun RecordingsScreen(
                                 },
                                 onShare = {
                                     shareRecording(context, viewModel.getShareIntent(recording))
+                                },
+                                onRename = {
+                                    recordingToRename = recording
+                                    renameNewText = recording.name.substringBeforeLast(".")
+                                },
+                                onDelete = {
+                                    recordingToDelete = recording
                                 }
                             )
                         }
@@ -423,6 +455,8 @@ fun RecordingCard(
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onShare: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isActive = playbackState.activeUri == recording.uri
@@ -514,7 +548,8 @@ fun RecordingCard(
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // Actions: Duration & Share
+                // Actions: Duration & overflow menu (accessible, no-swipe path
+                // to Rename / Share / Delete)
                 Column(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.Center
@@ -525,16 +560,67 @@ fun RecordingCard(
                         color = LightGrayBlue
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    IconButton(
-                        onClick = onShare,
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Share,
-                            contentDescription = "Share",
-                            tint = CoolGrayBlue,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    Box {
+                        var menuExpanded by remember { mutableStateOf(false) }
+                        IconButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreVert,
+                                contentDescription = "More actions",
+                                tint = CoolGrayBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            modifier = Modifier.background(Color(0xFF2B2D42))
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Rename", color = LightGrayBlue) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Edit,
+                                        contentDescription = null,
+                                        tint = Color(0xFF4A90E2)
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRename()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Share", color = LightGrayBlue) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Share,
+                                        contentDescription = null,
+                                        tint = CoolGrayBlue
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onShare()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete", color = CoralRed) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Delete,
+                                        contentDescription = null,
+                                        tint = CoralRed
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onDelete()
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -677,6 +763,63 @@ private fun shareRecording(context: Context, intent: Intent) {
         context.startActivity(chooser)
     } catch (e: Exception) {
         e.printStackTrace()
+    }
+}
+
+@Composable
+fun SwipeHintBanner(
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val renameBlue = Color(0xFF4A90E2)
+    Surface(
+        color = renameBlue.copy(alpha = 0.10f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, renameBlue.copy(alpha = 0.3f)),
+        shape = MaterialTheme.shapes.medium,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Swipe,
+                contentDescription = null,
+                tint = renameBlue,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            // Color-code each direction to the swipe background it reveals:
+            // right (blue) = rename, left (red) = delete.
+            Text(
+                text = buildAnnotatedString {
+                    append("Swipe a recording ")
+                    withStyle(SpanStyle(color = renameBlue, fontWeight = FontWeight.SemiBold)) {
+                        append("right to rename")
+                    }
+                    append("  ·  ")
+                    withStyle(SpanStyle(color = CoralRed, fontWeight = FontWeight.SemiBold)) {
+                        append("left to delete")
+                    }
+                },
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = CoolGrayBlue,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = "Dismiss hint",
+                    tint = CoolGrayBlue,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
     }
 }
 
