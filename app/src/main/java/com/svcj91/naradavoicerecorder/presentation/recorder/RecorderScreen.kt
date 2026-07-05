@@ -5,6 +5,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
@@ -383,15 +385,22 @@ fun RecorderScreen(
         )
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(DarkBg)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
+    Box(modifier = modifier.fillMaxSize().background(DarkBg)) {
+        val scrollState = rememberScrollState()
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            // heightIn(min = maxHeight) keeps the SpaceBetween layout spread out to
+            // fill the screen when content fits, while verticalScroll lets it scroll
+            // when content is taller than the screen (e.g. Display size = Large,
+            // large font scale, or when several banners are shown at once).
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .heightIn(min = maxHeight)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
             // Top Section: Title & Brand Info + Warning Banner
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -641,7 +650,7 @@ fun RecorderScreen(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .padding(vertical = 24.dp)
             ) {
                 // Waveform visualizer
                 AnimatedWaveform(isRecording = isRecording && !isPaused)
@@ -883,6 +892,7 @@ fun RecorderScreen(
                     // Dummy height to maintain layout spacing
                     Spacer(modifier = Modifier.height(30.dp))
                 }
+            }
             }
         }
 

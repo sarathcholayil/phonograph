@@ -131,7 +131,10 @@ fun RecordingsScreen(
                 )
             )
 
-            // Horizontal Filter & Sort chips
+            // Filter & Sort chips. Each chip takes half the row (weight(1f)) and the
+            // labels drop the "Sort:"/"Date:" prefixes (the icons convey that), so
+            // both chips stay on one line at any display size / font scale instead
+            // of wrapping and breaking the layout.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -140,11 +143,12 @@ fun RecordingsScreen(
             ) {
                 // Sort Chip Dropdown
                 var sortMenuExpanded by remember { mutableStateOf(false) }
-                Box {
+                Box(modifier = Modifier.weight(1f)) {
                     FilterChipButton(
-                        label = "Sort: ${sortOption.displayName}",
+                        label = sortOption.displayName,
                         icon = Icons.AutoMirrored.Rounded.Sort,
-                        onClick = { sortMenuExpanded = true }
+                        onClick = { sortMenuExpanded = true },
+                        modifier = Modifier.fillMaxWidth()
                     )
                     DropdownMenu(
                         expanded = sortMenuExpanded,
@@ -170,11 +174,12 @@ fun RecordingsScreen(
 
                 // Date Filter Chip Dropdown
                 var dateMenuExpanded by remember { mutableStateOf(false) }
-                Box {
+                Box(modifier = Modifier.weight(1f)) {
                     FilterChipButton(
-                        label = "Date: ${dateFilter.displayName}",
+                        label = dateFilter.displayName,
                         icon = Icons.Rounded.DateRange,
-                        onClick = { dateMenuExpanded = true }
+                        onClick = { dateMenuExpanded = true },
+                        modifier = Modifier.fillMaxWidth()
                     )
                     DropdownMenu(
                         expanded = dateMenuExpanded,
@@ -702,7 +707,10 @@ fun FilterChipButton(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = LightGrayBlue
+                color = LightGrayBlue,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
             Icon(
                 imageVector = Icons.Rounded.ArrowDropDown,
