@@ -404,7 +404,7 @@ fun RecorderScreen(
             // Top Section: Title & Brand Info + Warning Banner
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 28.dp)
+                modifier = Modifier.padding(top = 10.dp)
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.app_icon),
@@ -650,12 +650,12 @@ fun RecorderScreen(
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 24.dp)
+                    .padding(vertical = 10.dp)
             ) {
                 // Waveform visualizer
                 AnimatedWaveform(isRecording = isRecording && !isPaused)
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Timer display
                 Text(
@@ -669,7 +669,7 @@ fun RecorderScreen(
                     color = LightGrayBlue
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // State status text
                 if (isRecording) {
@@ -737,7 +737,7 @@ fun RecorderScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 32.dp)
+                    .padding(bottom = 18.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().height(160.dp),
@@ -939,7 +939,7 @@ fun AnimatedWaveform(
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(120.dp)
+            .height(90.dp)
             .padding(horizontal = 24.dp)
     ) {
         val width = size.width
